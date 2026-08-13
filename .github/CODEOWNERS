@@ -1,0 +1,15 @@
+# Every merge needs a human. The expert loop opens pull requests; it cannot
+# approve them.
+*                       @nextbaires
+
+# The evaluation protocol and the field definitions are what every published
+# result depends on. A change here silently invalidates the leaderboard.
+/open_eviden/bench/     @nextbaires
+/open_eviden/records.py @nextbaires
+
+# The measuring instrument. Changing an annotation moves every score without
+# changing a line of method, and judging one correctly means reading the article.
+/data/                  @nextbaires
+/tools/                 @nextbaires
+
+/.github/workflows/     @nextbaires

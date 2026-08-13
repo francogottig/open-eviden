@@ -1,0 +1,22 @@
+# Generated data. Only data/sample/ is committed.
+data/*
+!data/sample/
+!data/sample/**
+
+# Credentialed datasets land here and must never be committed. This entry is a
+# backstop, not the control — see open_eviden/sources/physionet.py, which
+# refuses to write anywhere else.
+data/restricted/
+
+# Benchmark output. The published leaderboard is committed; raw runs are not.
+leaderboard/runs/
+
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+.DS_Store

@@ -1,0 +1,46 @@
+Data licensing
+==============
+
+CODE in this repository is MIT licensed; see LICENSE.
+
+DERIVED DATA produced by this repository — the conformed corpus under
+data/silver/, the committed sample under data/sample/, benchmark outputs under
+leaderboard/ — is released under Creative Commons Attribution 4.0 International
+(CC BY 4.0): https://creativecommons.org/licenses/by/4.0/
+
+That covers our annotations. It does not, and cannot, relicense the articles
+themselves.
+
+SOURCE ARTICLES keep their own licences, article by article.
+
+  The committed sample under data/sample/ contains full text from the Europe PMC
+  Open Access subset, and every article in it is CC BY 4.0. That is not a
+  convenience: it is a filter applied at ingest. open_eviden/sources/europepmc.py
+  refuses to keep an article whose licence field is anything else, because the OA
+  subset also contains CC BY-NC and CC BY-NC-ND articles that we would not be
+  free to redistribute here.
+
+  Each document row carries its own `license`, `doi`, `pmcid` and `journal`, so
+  the provenance of any single row is recoverable from the data rather than from
+  this file. `open_eviden/qa/provenance.py` checks that every row still has them.
+
+  If you re-run the ingester with a wider licence filter for your own use, the
+  result is yours to keep and not ours to license. Do not commit it here.
+
+  Europe PMC REST API terms: https://europepmc.org/RestfulWebService
+  PubMed E-utilities terms: https://www.ncbi.nlm.nih.gov/books/NBK25497/
+
+CREDENTIALED DATA is never in this repository, under any licence.
+
+  PhysioNet datasets that require a data use agreement — MIMIC-IV among them —
+  are referenced by identifier only. open_eviden/sources/physionet.py resolves an
+  identifier to the landing page and the DUA you must sign; it downloads nothing
+  on your behalf and writes only into data/restricted/, which git ignores.
+
+  If you obtain such data under your own agreement, that agreement governs it.
+  It does not become CC BY 4.0 by passing through this code, and derived tables
+  built from it are still bound by it.
+
+If you redistribute a corpus assembled with this tool, carry the per-article
+licence and attribution through. The authors who published open access are the
+reason any of this is possible.

@@ -1,0 +1,59 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "open-eviden"
+version = "0.1.0"
+description = "Grounded extraction of study characteristics from open clinical literature, and a benchmark for it."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { file = "LICENSE" }
+authors = [{ name = "Franco Gottig" }]
+keywords = ["evidence-synthesis", "systematic-review", "clinical-trials", "benchmark", "extraction"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Healthcare Industry",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+    "License :: OSI Approved :: MIT License",
+]
+dependencies = [
+    "numpy>=1.26",
+    "pandas>=2.1",
+    "pyarrow>=14.0",
+    "requests>=2.31",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "ruff>=0.6"]
+# The LLM extractor is optional on purpose. Everything that CI checks — the
+# tests, the deterministic baselines, the published leaderboard — runs without
+# it, so a clone with no API key reproduces every committed number.
+llm = ["anthropic>=0.40"]
+
+[project.urls]
+Homepage = "https://github.com/nextbaires/open-eviden"
+Issues = "https://github.com/nextbaires/open-eviden/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["open_eviden"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+filterwarnings = ["error::FutureWarning"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.ruff.lint.per-file-ignores]
+# The reference-annotation table reads as one row per annotation — value,
+# quotation anchor, and document on a single line. Wrapping those rows to fit a
+# line limit makes the table harder to audit, which is the one thing it exists
+# for.
+"tools/build_reference_set.py" = ["E501"]

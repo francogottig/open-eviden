@@ -1,0 +1,96 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          python-version: ${{ matrix.python-version }}
+
+      # setup-uv with python-version already created .venv and exported
+      # VIRTUAL_ENV, so `uv venv` here would fail on the existing directory and
+      # `uv pip install --system` would hit PEP 668 on the runner's managed
+      # interpreter. Install into that venv and call its binaries directly —
+      # same thing that runs locally, no resolution ambiguity.
+      - name: Install
+        run: uv pip install -e ".[dev]"
+
+      - name: Lint
+        run: .venv/bin/ruff check .
+
+      # Everything below runs against the committed sample. No network, no API
+      # key — if CI needs either to verify a benchmark, the benchmark is not
+      # reproducible, and the LLM extractor is optional precisely so that this
+      # stays true.
+      - name: Test
+        run: .venv/bin/pytest -q
+
+      - name: Check provenance
+        # Offline half of the promise: every reference quotation is verbatim in
+        # its own source, every document carries a well-formed DOI, and every
+        # article is under a licence we may redistribute.
+        run: .venv/bin/python -m open_eviden.qa.cli
+
+      - name: Run the deterministic baselines end to end
+        run: |
+          .venv/bin/python -m open_eviden.bench.run --extractor regex
+          .venv/bin/python -m open_eviden.bench.run --extractor sections
+
+      - name: Rebuild leaderboard
+        run: .venv/bin/python -m open_eviden.leaderboard
+
+      - name: Fail if the leaderboard drifted
+        # The committed results.json must match what the code produces from the
+        # committed sample. A pull request that changes scores has to say so in
+        # the diff rather than leaving the published numbers stale.
+        run: |
+          if ! git diff --quiet -- leaderboard/results.json; then
+            echo "::error::leaderboard/results.json is out of date."
+            echo "Run: python -m open_eviden.leaderboard  — and commit the result."
+            git diff -- leaderboard/results.json
+            exit 1
+          fi
+
+  # Separate job, on purpose. This one needs the internet and depends on
+  # publishers keeping their records alive, so it can fail for reasons that have
+  # nothing to do with a change. Folding it into the offline job would mean a
+  # publisher's bad afternoon turns every pull request red, and a check that
+  # does that gets switched off within a month.
+  dois-resolve:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          python-version: "3.12"
+
+      - name: Install
+        run: uv pip install -e ".[dev]"
+
+      - name: Every claim must resolve to a live DOI
+        # A 404 from the resolver fails the build: that is a wrong identifier and
+        # a broken promise. A timeout does not: that is somebody else's server.
+        run: .venv/bin/python -m open_eviden.qa.cli --doi --allow-network-errors

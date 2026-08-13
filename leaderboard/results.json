@@ -1,0 +1,119 @@
+{
+  "ranked_by": "f1, higher is better; ties broken by precision",
+  "note": "Entries are only comparable within a protocol group. The grounding rate matters independently of rank: a method can rank first on F1 while grounding poorly, which means it is producing correct values it cannot point at \u2014 and a value nobody can check against the source is the thing this benchmark exists to discourage.",
+  "protocols": [
+    {
+      "protocol": "test-split 10docs dev30% text-f1>=0.6",
+      "entries": [
+        {
+          "extractor": "sections",
+          "precision": 0.787234043,
+          "recall": 0.725490196,
+          "f1": 0.755102041,
+          "grounding_rate": 1.0,
+          "n_claims_returned": 47,
+          "n_claims_grounded": 47,
+          "n_documents": 10,
+          "rejection_reasons": {},
+          "per_field": {
+            "n_randomised": {
+              "f1": 0.555555556,
+              "precision": 0.555555556,
+              "recall": 0.555555556
+            },
+            "design": {
+              "f1": 1.0,
+              "precision": 1.0,
+              "recall": 1.0
+            },
+            "blinding": {
+              "f1": 0.666666667,
+              "precision": 0.666666667,
+              "recall": 0.666666667
+            },
+            "follow_up_weeks": {
+              "f1": 0.75,
+              "precision": 0.75,
+              "recall": 0.75
+            },
+            "registration_id": {
+              "f1": 1.0,
+              "precision": 1.0,
+              "recall": 1.0
+            },
+            "primary_outcome": {
+              "f1": 0.333333333,
+              "precision": 0.5,
+              "recall": 0.25
+            }
+          },
+          "deterministic": true,
+          "can_hallucinate": false,
+          "description": {
+            "extractor": "SectionScopedExtractor",
+            "approach": "regular expressions restricted to abstract, methods and results",
+            "deterministic": true,
+            "requires_network": false,
+            "can_hallucinate": false,
+            "scope": "abstract -> methods -> results"
+          },
+          "rank": 1
+        },
+        {
+          "extractor": "regex",
+          "precision": 0.765957447,
+          "recall": 0.705882353,
+          "f1": 0.734693878,
+          "grounding_rate": 1.0,
+          "n_claims_returned": 47,
+          "n_claims_grounded": 47,
+          "n_documents": 10,
+          "rejection_reasons": {},
+          "per_field": {
+            "n_randomised": {
+              "f1": 0.555555556,
+              "precision": 0.555555556,
+              "recall": 0.555555556
+            },
+            "design": {
+              "f1": 1.0,
+              "precision": 1.0,
+              "recall": 1.0
+            },
+            "blinding": {
+              "f1": 0.666666667,
+              "precision": 0.666666667,
+              "recall": 0.666666667
+            },
+            "follow_up_weeks": {
+              "f1": 0.625,
+              "precision": 0.625,
+              "recall": 0.625
+            },
+            "registration_id": {
+              "f1": 1.0,
+              "precision": 1.0,
+              "recall": 1.0
+            },
+            "primary_outcome": {
+              "f1": 0.333333333,
+              "precision": 0.5,
+              "recall": 0.25
+            }
+          },
+          "deterministic": true,
+          "can_hallucinate": false,
+          "description": {
+            "extractor": "RegexExtractor",
+            "approach": "regular expressions over the full text",
+            "deterministic": true,
+            "requires_network": false,
+            "can_hallucinate": false,
+            "scope": "full-text"
+          },
+          "rank": 2
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,109 @@
+name: Domain proposal
+description: Propose a change based on your expertise. No coding required.
+title: "[proposal] "
+labels: ["proposal", "needs-domain-review"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        You do not need to write code, and you do not need to know how this repository is
+        built. Describe what you know in your own words and in as much detail as you like.
+
+        A maintainer reads your proposal first. If it is in scope, they apply the
+        `approved-for-drafting` label, and an assistant opens a pull request implementing it.
+        You will be asked to check that the pull request actually says what you meant.
+
+        **Do not paste patient data, case details, or anything from an unpublished
+        manuscript into this form.** Issues here are public and permanent. If your point
+        rests on something you cannot share, describe the pattern rather than the case.
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What are you proposing?
+      description: >
+        What should the tool do differently, and what happens today that is wrong,
+        missing, or incomplete? Write it the way you would explain it to a colleague
+        over coffee, not the way you would write a protocol amendment.
+      placeholder: >
+        The extractor records a single participant count per trial, but for a
+        cluster-randomised trial the number that matters is the number of clusters,
+        not the number of individuals — 18 villages, not 4,000 people. Recording the
+        individual count against a cluster trial makes the design and the sample size
+        contradict each other, and anyone pooling these rows will weight that trial as
+        though it had 4,000 independent observations.
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: What is this based on?
+      description: >
+        Guidelines, papers (DOIs), reporting standards, or your own experience doing
+        this work by hand. Firsthand experience is legitimate evidence — say so and
+        describe it. Every claim in the resulting pull request must be traceable to
+        something here.
+      placeholder: |
+        - CONSORT extension for cluster randomised trials, https://doi.org/10.1136/bmj.e5661
+        - Cochrane Handbook chapter 23, on unit-of-analysis errors in cluster trials
+        - Firsthand: nine years screening and extracting for Cochrane reviews; the
+          cluster/individual mix-up is the single most common extraction error I correct
+          in second-reviewer checks, and it never gets caught by the numbers alone.
+    validations:
+      required: true
+
+  - type: textarea
+    id: test
+    attributes:
+      label: How would we know if you are right?
+      description: >
+        What measurement, comparison, or check would show this is an improvement rather
+        than a preference? If you are not sure, say so — a maintainer will help define it.
+      placeholder: >
+        Add a cluster-randomised trial to the corpus and check that the extractor records
+        the number of clusters. If it still reports the individual count, or reports
+        nothing, the current behaviour is wrong and mine is right. If it turns out the
+        articles state both numbers so clearly that the current approach already picks
+        the right one, I am wrong and this is not worth changing.
+    validations:
+      required: true
+
+  - type: input
+    id: scope
+    attributes:
+      label: Which part of the project does this touch?
+      description: Optional. A directory, a file, or a plain description — a guess is fine.
+      placeholder: the field definitions, probably records.py
+
+  - type: dropdown
+    id: confidence
+    attributes:
+      label: How settled is this in your field?
+      options:
+        - Established — this is in the reporting guidelines, the project is simply behind
+        - Supported — good evidence, some open debate
+        - Plausible — my reading of the evidence, not yet consensus
+        - Speculative — a hypothesis worth testing
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: acknowledgements
+    attributes:
+      label: Before submitting
+      options:
+        - label: >
+            I have not included patient data, personally identifying information, material
+            from an unpublished manuscript, or anything else I am not free to share in
+            public and permanently.
+          required: true
+        - label: >
+            I understand this project is research tooling, produces no patient-facing
+            output, and makes no diagnostic claims — and that my proposal does not ask
+            it to.
+          required: true
+        - label: >
+            I understand the resulting pull request will credit me and that I may be asked
+            to confirm it represents my intent.
+          required: true
