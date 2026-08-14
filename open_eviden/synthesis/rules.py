@@ -276,12 +276,42 @@ REGISTRATION_PATTERNS = (
     re.compile(r"\b\d{4}-\d{6}-\d{2}\b"),  # EudraCT
 )
 
+#: Words that cannot be part of an outcome name, read backwards from a label.
+#:
+#: Only used by the apposition pattern below, which reads right to left and needs
+#: somewhere to stop. Stopping at a preposition, article, conjunction or copula
+#: leaves "time trial performance" rather than "the effect of the intervention on
+#: time trial performance", which is the whole clause the outcome sits in.
+_NOT_IN_OUTCOME = (
+    r"of|on|in|at|for|to|with|by|from|and|or|the|a|an|our|its|their|this|that|"
+    r"these|those|was|were|is|are|be|been|as|than|between|during"
+)
+
+#: One word of an outcome name.
+_OUTCOME_WORD = rf"(?!(?:{_NOT_IN_OUTCOME})\b)[\w'’‐-]+"
+
 #: The primary outcome, as the authors define it.
 #:
 #: Capped at 200 characters and stopped at sentence-ending punctuation, because
 #: an unbounded capture runs into the next three sentences and the token-overlap
 #: score then rewards verbosity — a longer capture contains the reference tokens
 #: by accident.
+#:
+#: CONSORT 2010 item 6a asks authors for "completely defined pre-specified
+#: primary outcome measures" (https://doi.org/10.1136/bmj.c332) and says nothing
+#: about the construction used to define them, so a report is free to name the
+#: outcome after a copula, in apposition inside brackets, or after a qualifier
+#: that separates the noun from the verb. Per @nextbaires (#1), reading only the
+#: first of those returned nothing at all on three of the four articles this
+#: field missed — and nothing reads as "the trial declared no primary outcome"
+#: rather than "the tool could not parse the sentence".
+#:
+#: Order is priority: the first pattern that matches anywhere in the text wins,
+#: so the explicit definitions stay ahead of the appositions, which are in turn
+#: ahead of the loosened copula. That ordering is load-bearing on at least one
+#: article, which names its outcome in brackets in the sample-size calculation
+#: and again, differently worded, in a later "the primary outcome of this trial
+#: was …" sentence.
 PRIMARY_OUTCOME_PATTERNS = (
     re.compile(
         r"\b(?:the\s+)?(?:co-?)?primary\s+(?:outcome|endpoint|efficacy\s+endpoint)"
@@ -298,7 +328,78 @@ PRIMARY_OUTCOME_PATTERNS = (
         r"([^.;]{5,200})",
         re.IGNORECASE,
     ),
+    # "…an effect size of 0.86 for the primary outcome (premenstrual syndrome
+    # severity)…" — the label first, the outcome in apposition after it. Bounded
+    # to what is inside the brackets, so it cannot run past the closing one.
+    re.compile(
+        r"\b(?:the\s+)?(?:co-?)?primary\s+(?:outcome|endpoint)(?:\s+measure)?s?\s*"
+        r"\(([^)]{5,120})\)",
+        re.IGNORECASE,
+    ),
+    # "…the effect of the intervention on time trial performance (our primary
+    # outcome)…" — the same apposition with the label second. Per @nextbaires
+    # (#1) this is the shape a rule that only ever looks rightward cannot reach.
+    # The capture is the run of words immediately before the bracket that
+    # contains no preposition, article or copula; five words is long enough for
+    # "work completed during the first time trial" and short enough that it
+    # cannot swallow the clause the outcome is embedded in.
+    re.compile(
+        # The leading \b is load-bearing: without it the capture starts inside
+        # the barrier word instead of skipping it, and "…intervention on time
+        # trial performance" yields "n time trial performance".
+        rf"\b({_OUTCOME_WORD}(?:\s+{_OUTCOME_WORD}){{0,4}})\s*"
+        r"\((?:our|the|its|a)?\s*(?:pre-?registered\s+|pre-?specified\s+)?(?:co-?)?"
+        r"primary\s+(?:outcome|endpoint)(?:\s+measure)?s?\)",
+        re.IGNORECASE,
+    ),
+    # "The primary outcomes *of this feasibility trial* were intervention
+    # practicality and acceptability." Per @nextbaires (#1) the intervening
+    # phrase is ordinary English, and requiring noun and copula to be adjacent
+    # rejects it.
+    #
+    # The qualifier is the tightest thing that admits the reported shape: a
+    # prepositional phrase, no punctuation inside it, at most 40 characters.
+    # That is deliberate, and it is where the proposal's own falsification
+    # condition bites — a qualifier allowed to contain a comma also matches
+    # "no difference in the primary outcome, which was consistent with earlier
+    # work", a discussion sentence that names nothing, and one allowed to start
+    # anywhere matches "the primary outcome rate in the control group is 20%",
+    # a sample-size sentence whose capture would be a percentage.
+    re.compile(
+        r"\b(?:the\s+)?(?:co-?)?primary\s+(?:outcome|endpoint)(?:\s+measure)?s?\s+"
+        r"(?:(?:of|in|for|during|at|across)\s+[^.;:,()]{1,40}?\s+)?"
+        r"(?:was|were|is|are)\s+(?:the\s+)?([^.;]{5,200})",
+        re.IGNORECASE,
+    ),
 )
+
+#: A numbered citation marker inside a captured outcome — "[ 30 ]", "[16, 17]".
+_CITATION_MARKER = re.compile(r"\s*\[\s*\d+(?:\s*[,;–-]\s*\d+)*\s*\]")
+
+
+def clean_outcome(value: str) -> str:
+    """Trim a captured outcome down to the outcome.
+
+    The capture stops at sentence punctuation, which leaves the author's
+    referencing apparatus inside it: "changes in the PI (according to Silness
+    and Loe [30]) and GI (accord…" on a trial whose outcome is the plaque index.
+    Per @nextbaires (#1) the capture is correct and the padding is not part of
+    what a reviewer records.
+
+    Two things are removed and nothing else: numbered citation markers, and a
+    trailing fragment left dangling by an unclosed bracket, which is what the
+    200-character cap and the sentence-punctuation stop produce when they land
+    inside a parenthesis. Nothing is reordered and no word is rewritten.
+
+    This trims the *value*. The quotation is unaffected — it stays the sentence
+    sliced out of the document — so grounding is exactly as it was, which
+    `tests/test_extractors.py` asserts on the corpus.
+    """
+    cleaned = _CITATION_MARKER.sub("", value)
+    for opener, closer in (("(", ")"), ("[", "]")):
+        while cleaned.count(opener) > cleaned.count(closer):
+            cleaned = cleaned[: cleaned.rindex(opener)]
+    return cleaned.strip().strip(",;:-–—").strip()
 
 
 def _first_match(patterns, text: str):
@@ -415,7 +516,13 @@ def extract_claims(text: str, section: str = "full-text") -> list[Claim]:
 
     match = _first_match(PRIMARY_OUTCOME_PATTERNS, text)
     if match:
-        add("primary_outcome", match.group(1).strip(), match)
+        outcome = clean_outcome(match.group(1))
+        # A capture that cleans down to nothing — all citation, no outcome — is
+        # possible in principle. Returning it would be an empty-value rejection
+        # counted against the grounding rate, where saying nothing is the
+        # abstention the protocol already knows how to score.
+        if outcome:
+            add("primary_outcome", outcome, match)
 
     return claims
 
