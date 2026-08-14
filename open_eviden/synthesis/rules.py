@@ -276,12 +276,43 @@ REGISTRATION_PATTERNS = (
     re.compile(r"\b\d{4}-\d{6}-\d{2}\b"),  # EudraCT
 )
 
+#: Words that close a noun phrase when it is read from right to left.
+#:
+#: Only the apposition pattern below needs these. It is the one rule here that
+#: has to find where a noun phrase *begins* rather than where it ends, because
+#: the outcome is named before the label: "the effect of the intervention on
+#: time trial performance (our primary outcome)". Reading leftwards from the
+#: bracket, the phrase is over at "on"; without a stop the capture runs back
+#: through "the effect of" and takes half a sample-size calculation with it.
+_OUTCOME_PHRASE_STOP = (
+    r"on|of|in|for|with|to|from|by|at|and|or|the|a|an|"
+    r"was|were|is|are|be|been|that|which|our|their|its"
+)
+
+#: One word of an outcome phrase — anything that is not one of the stops above.
+_OUTCOME_WORD = rf"(?!\b(?:{_OUTCOME_PHRASE_STOP})\b)[\w-]+"
+
 #: The primary outcome, as the authors define it.
 #:
 #: Capped at 200 characters and stopped at sentence-ending punctuation, because
 #: an unbounded capture runs into the next three sentences and the token-overlap
 #: score then rewards verbosity — a longer capture contains the reference tokens
 #: by accident.
+#:
+#: CONSORT 2010 item 6a asks for "completely defined pre-specified primary
+#: outcome measures" (https://doi.org/10.1136/bmj.c332) and says nothing about
+#: the construction used to define them, so there is no one sentence shape to
+#: rely on. The first three entries below read a copula; the last three read the
+#: shapes @nextbaires found by hand in the articles this baseline was returning
+#: nothing for (#1) — two appositions and a qualifier sitting between the noun
+#: and the verb.
+#:
+#: Order is load-bearing, and it is why the new shapes were appended rather than
+#: inserted. First pattern to match anywhere in the text wins, so every article
+#: that scored before still answers for the same reason it did before. It also
+#: settles a genuine conflict: an article can name its outcome in a bracket in
+#: the Methods and restate it after a copula further down, and the bracket is
+#: the terser of the two.
 PRIMARY_OUTCOME_PATTERNS = (
     re.compile(
         r"\b(?:the\s+)?(?:co-?)?primary\s+(?:outcome|endpoint|efficacy\s+endpoint)"
@@ -298,7 +329,91 @@ PRIMARY_OUTCOME_PATTERNS = (
         r"([^.;]{5,200})",
         re.IGNORECASE,
     ),
+    # Apposition, label first: "for the primary outcome (premenstrual syndrome
+    # severity)". The bracket names the outcome, and it is usually the tersest
+    # statement of it in the article.
+    #
+    # The two guards are what stop this being a rule that fires on any bracket
+    # near the word "primary". A cross-reference or a statistic in that position
+    # is not a definition — "the primary outcome (see Table 2)", "the primary
+    # outcome ( n = 40)", "the primary outcome (≥ 2.8%)" — so the bracket must
+    # not open with one, and it must contain three consecutive letters.
+    re.compile(
+        r"\b(?:the\s+)?(?:co-?)?primary\s+(?:outcome|endpoint)(?:\s+measure)?s?\s*"
+        r"\((?!\s*(?:(?:see|table|tab|fig|figure|ref)\b|n\s*=|p\s*[<=>]|\d))"
+        r"(?=[^)]*[A-Za-z]{3})([^)]{5,200})\)",
+        re.IGNORECASE,
+    ),
+    # Apposition, outcome first: "on time trial performance (our primary
+    # outcome)". The label points backwards, so this is the only pattern that
+    # reads leftwards, and it takes at most six words before the bracket,
+    # stopping at the first preposition, article or copula. An unbounded read
+    # backwards is what would turn this into the loose rule the proposal warns
+    # about.
+    re.compile(
+        rf"\b({_OUTCOME_WORD}(?:\s+{_OUTCOME_WORD}){{0,5}})\s*"
+        r"\((?:(?:our|the|its|their)\s+)?"
+        r"(?:(?:pre-?registered|pre-?specified|prespecified)\s+)?"
+        r"(?:co-?)?primary\s+(?:outcome|endpoint)(?:\s+measure)?s?\)",
+        re.IGNORECASE,
+    ),
+    # A qualifier between the noun and the copula: "The primary outcomes of this
+    # feasibility trial were ...". Ordinary English, and the adjacency the first
+    # pattern requires is all that defeats it.
+    #
+    # The qualifier is deliberately tighter than "anything in between": one
+    # prepositional phrase, no comma, at most 40 characters. Both relaxations
+    # match exactly what the proposal warns about — dropping the preposition
+    # matches "the primary outcome rate in the control group is 20%", and
+    # allowing a comma matches "no difference in the primary outcome, which was
+    # consistent with earlier work".
+    re.compile(
+        r"\b(?:the\s+)?(?:co-?)?primary\s+(?:outcome|endpoint)(?:\s+measure)?s?\s+"
+        r"(?:of|in|for)\s+(?:[^.;,]{3,40}?)\s+(?:was|were|is|are)\s+(?:the\s+)?"
+        r"([^.;]{5,200})",
+        re.IGNORECASE,
+    ),
 )
+
+#: Numbered citation markers inside a captured outcome — "[ 30 ]", "[ 12 , 14 ]".
+_CITATION_MARKER = re.compile(r"\s*\[\s*\d+(?:\s*[,;–—-]\s*\d+)*\s*\]")
+
+
+def clean_outcome(value: str) -> str:
+    """Trim a captured outcome down to the outcome.
+
+    Two kinds of debris, both reported by @nextbaires in #1, and neither of them
+    part of what the authors named as the outcome:
+
+    *Citation markers.* "changes in the PI (according to Silness and Loe [ 30 ])"
+    is a correct capture padded with a reference the reader does not need.
+
+    *A bracket the capture cut in half.* "reduction in liver fat-fraction (≥ 2"
+    is what is left when the 200-character cap, or a full stop inside "2.8%",
+    lands between "(" and ")". An unclosed bracket is always an artefact of where
+    the span was cut, so everything from it onwards goes.
+
+    This trims the **value** only. The quotation is still the sentence sliced out
+    of the document by `sentence_around`, so grounding is untouched — which is
+    the point, and `tests/test_extractors.py` holds it.
+    """
+    value = _CITATION_MARKER.sub("", value)
+
+    depth = 0
+    unclosed = None
+    for index, char in enumerate(value):
+        if char == "(":
+            if depth == 0:
+                unclosed = index
+            depth += 1
+        elif char == ")":
+            depth = max(0, depth - 1)
+            if depth == 0:
+                unclosed = None
+    if unclosed is not None:
+        value = value[:unclosed]
+
+    return value.strip(" ,;:-–—")
 
 
 def _first_match(patterns, text: str):
@@ -415,7 +530,13 @@ def extract_claims(text: str, section: str = "full-text") -> list[Claim]:
 
     match = _first_match(PRIMARY_OUTCOME_PATTERNS, text)
     if match:
-        add("primary_outcome", match.group(1).strip(), match)
+        # Trimming can empty a capture that was nothing but a citation. Saying
+        # nothing is the right answer there; returning "" would be rejected as
+        # `empty_value` and would depress the grounding rate for a claim that was
+        # never made.
+        outcome = clean_outcome(match.group(1))
+        if outcome:
+            add("primary_outcome", outcome, match)
 
     return claims
 
